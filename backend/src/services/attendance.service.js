@@ -1,4 +1,6 @@
 import { Attendance, Worker, nextSeq, PUBLIC } from '../models/index.js';
+import { getHolidaySet } from './holiday.service.js';
+import { buildMissingRows, eachDate, monthRange } from '../utils/attendanceDays.js';
 import { addAuditLog } from './audit.service.js';
 import { HttpError } from '../utils/httpError.js';
 import { genId, getLocalDateString, isValidDate } from '../utils/dateUtils.js';
@@ -27,14 +29,65 @@ function toHttp(fn) {
   }
 }
 
-export async function getAttendance(filters = {}, { withPhotos = true } = {}) {
+/** Workers with only what absent / payroll maths needs (legacy base64 photo stripped inside Mongo) */
+export async function getWorkersLite() {
+  return cached(
+    'workers',
+    { lite: true },
+    () =>
+      Worker.aggregate([
+        { $sort: { seq: 1 } },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            fullName: 1,
+            employeeId: 1,
+            workingTime: 1,
+            status: 1,
+            dateOfJoining: 1,
+            department: 1,
+            monthlySalary: 1,
+            recordSource: 1,
+            profilePhoto: {
+              $cond: [{ $regexMatch: { input: { $ifNull: ['$profilePhoto', ''] }, regex: '^data:image/' } }, '', { $ifNull: ['$profilePhoto', ''] }],
+            },
+          },
+        },
+      ]),
+    120
+  );
+}
+
+/** Date window a filter set covers (null = unbounded, no virtual rows) */
+function filterWindow(filters) {
+  if (filters.date && isValidDate(String(filters.date))) return { from: String(filters.date), to: String(filters.date) };
+  if (filters.month && /^\d{4}-\d{2}$/.test(String(filters.month))) {
+    const r = monthRange(String(filters.month));
+    return { from: r.from, to: r.to };
+  }
+  if (filters.from && filters.to && isValidDate(String(filters.from)) && isValidDate(String(filters.to))) {
+    return { from: String(filters.from), to: String(filters.to) };
+  }
+  return null;
+}
+
+/**
+ * includeAbsent: also return rows for workers who did NOT check in
+ *   ABSENT  = shift start + grace is over (or the day is past) and no punch
+ *   HOLIDAY = factory holiday, counts as present
+ * They are built on the fly (virtual: true, id "absent-<worker>-<date>"), nothing is stored.
+ * A worker who arrives later simply gets a normal (late) record, which replaces the absent row.
+ */
+export async function getAttendance(filters = {}, { withPhotos = true, includeAbsent = false } = {}) {
   const conds = [];
   if (filters.date) conds.push({ date: String(filters.date) });
   if (filters.month) conds.push({ date: { $regex: `^${String(filters.month).replace(/[^0-9-]/g, '')}` } });
   if (filters.from && isValidDate(String(filters.from))) conds.push({ date: { $gte: String(filters.from) } });
   if (filters.to && isValidDate(String(filters.to))) conds.push({ date: { $lte: String(filters.to) } });
   if (filters.workerId) conds.push({ workerId: String(filters.workerId) });
-  if (filters.status) conds.push({ status: String(filters.status) });
+  // status filter is applied AFTER virtual rows are added when includeAbsent
+  if (filters.status && !includeAbsent) conds.push({ status: String(filters.status) });
   const q = conds.length ? { $and: conds } : {};
 
   // Legacy base64 photos are stripped INSIDE Mongo ($$REMOVE) so they never cross the network.
@@ -48,13 +101,29 @@ export async function getAttendance(filters = {}, { withPhotos = true } = {}) {
   ];
 
   // short TTL: guard check-in must show on admin screen fast even if another server/Redis did the write
-  return cached('att', { filters: q, withPhotos }, async () => {
+  const rows = await cached('att', { filters: q, withPhotos }, async () => {
     const t0 = Date.now();
-    const rows = await Attendance.aggregate(pipeline).allowDiskUse(true);
+    const list = await Attendance.aggregate(pipeline).allowDiskUse(true);
     const ms = Date.now() - t0;
-    if (ms > 500) console.warn(`[Attendance] slow query ${ms}ms rows=${rows.length} q=${JSON.stringify(q)}`);
-    return rows;
+    if (ms > 500) console.warn(`[Attendance] slow query ${ms}ms rows=${list.length} q=${JSON.stringify(q)}`);
+    return list;
   }, 15);
+
+  const win = includeAbsent ? filterWindow(filters) : null;
+  if (!win) return rows;
+
+  const [workersAll, holidaySet, rules] = await Promise.all([getWorkersLite(), getHolidaySet(win.from, win.to), getRules()]);
+  const workers = filters.workerId ? workersAll.filter(w => w.id === String(filters.workerId)) : workersAll;
+  const missing = buildMissingRows({
+    dates: eachDate(win.from, win.to),
+    workers,
+    records: rows,
+    holidaySet,
+    graceMinutes: rules.gracePeriodMinutes,
+  });
+  // stored ABSENT / NOT_ARRIVED placeholders (legacy data) show as absent too
+  const all = [...rows.filter(r => !(r.status === 'NOT_ARRIVED' && !r.checkInTime)), ...missing];
+  return filters.status ? all.filter(r => r.status === String(filters.status)) : all;
 }
 
 /** Latest record checked-in but not checked-out within last 24 hours */

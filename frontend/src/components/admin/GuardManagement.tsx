@@ -12,6 +12,7 @@ import {
   X,
   AlertCircle,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import { GuardUser } from '../../types';
 import { ApiService } from '../../services/api';
@@ -127,6 +128,22 @@ export const GuardManagement: React.FC<GuardManagementProps> = ({ onDataChanged 
       refreshGuards();
     } catch (err: any) {
       alert(err.message || 'Failed to save guard.');
+    }
+  };
+
+  const handleDeleteGuard = async (guard: GuardUser) => {
+    if (
+      !window.confirm(
+        `Delete guard ${guard.fullName} (${guard.guardId}) permanently?\n\nTheir login stops working at once. Attendance already marked by this guard stays as it is.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await ApiService.deleteGuard(guard.id);
+      refreshGuards();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete guard.');
     }
   };
 
@@ -266,6 +283,14 @@ export const GuardManagement: React.FC<GuardManagementProps> = ({ onDataChanged 
                 className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold cursor-pointer"
               >
                 <KeyRound className="w-3.5 h-3.5" /> Reset Password
+              </button>
+
+              <button
+                onClick={() => handleDeleteGuard(guard)}
+                className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold cursor-pointer"
+                title="Delete this guard permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
 
               <button

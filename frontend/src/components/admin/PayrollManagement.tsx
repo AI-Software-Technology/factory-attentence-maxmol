@@ -118,7 +118,7 @@ export const PayrollManagementView: React.FC<PayrollManagementProps> = ({
       r.baseSalary || 0,
       '30 Days',
       Number(r.dailyWage != null ? r.dailyWage : ((r.baseSalary || 15000) / 30)).toFixed(2),
-      r.daysPresent ?? 30,
+      r.daysPresent ?? 0,
       r.daysAbsent ?? 0,
       Number(r.absentDeduction != null ? r.absentDeduction : 0).toFixed(2),
       r.totalLateMinutes ?? 0,
@@ -286,8 +286,10 @@ export const PayrollManagementView: React.FC<PayrollManagementProps> = ({
                     </td>
 
                     <td className="py-3 px-4 text-xs font-mono">
-                      <div><strong className="text-emerald-400">{pay.daysPresent ?? 30}</strong> Present / 30 Days</div>
+                      <div><strong className="text-emerald-400">{pay.daysPresent ?? 0}</strong> Days Present</div>
+                      {(pay.daysHoliday || 0) > 0 && <div className="text-purple-300">{pay.daysHoliday} Holiday (paid)</div>}
                       {(pay.daysAbsent || 0) > 0 && <div className="text-rose-400">{pay.daysAbsent} Days Absent</div>}
+                      {(pay.pendingDays || 0) > 0 && <div className="text-slate-400">{pay.pendingDays} days not yet payable</div>}
                     </td>
 
                     {/* Absent Deduction */}
@@ -462,7 +464,10 @@ export const PayrollManagementView: React.FC<PayrollManagementProps> = ({
               </div>
               <div>
                 <span className="text-slate-500 block font-sans">Days Present:</span>
-                <span className="font-medium text-slate-200">{viewingSlip.daysPresent ?? 30} of 30 Days</span>
+                <span className="font-medium text-slate-200">
+                  {viewingSlip.daysPresent ?? 0} Days
+                  {(viewingSlip.daysHoliday || 0) > 0 ? ` (incl. ${viewingSlip.daysHoliday} holiday)` : ''}
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block font-sans">Per-Minute Rate:</span>
@@ -505,6 +510,12 @@ export const PayrollManagementView: React.FC<PayrollManagementProps> = ({
                 <span className="font-bold text-rose-400 uppercase tracking-wider block pb-1 border-b border-slate-800">
                   Policy Deductions
                 </span>
+                {(viewingSlip.pendingDays || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Not yet payable ({viewingSlip.pendingDays} Days):</span>
+                    <span className="font-mono text-slate-300">-{formatCurrency(viewingSlip.pendingDeduction || 0, true)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-400">Absent ({viewingSlip.daysAbsent || 0} Days):</span>
                   <span className="font-mono text-rose-400">-{formatCurrency(viewingSlip.absentDeduction || 0, true)}</span>

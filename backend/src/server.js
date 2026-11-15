@@ -7,7 +7,7 @@ import { UPLOAD_ROOT } from './utils/photoStore.js';
 import { seedIfEmpty, ensureAdmin } from './services/seed.service.js';
 import { ensureDefaultShifts } from './services/shift.service.js';
 import { Attendance } from './models/index.js';
-import { cleanupPlaceholderDocuments } from './services/worker.service.js';
+import { cleanupPlaceholderDocuments, migrateLegacyProfilePhotos } from './services/worker.service.js';
 import app from './app.js';
 
 async function start() {
@@ -19,6 +19,7 @@ async function start() {
   await ensureDefaultShifts();
   Attendance.createIndexes().catch(e => console.warn('[Index] attendance:', e.message)); // background
   await cleanupPlaceholderDocuments();
+  migrateLegacyProfilePhotos(); // background, one-time per photo
 
   const server = app.listen(env.port, '0.0.0.0', () => {
     console.log(`[GatePass API] http://0.0.0.0:${env.port}  (TZ=${env.timezone}, env=${env.nodeEnv})`);

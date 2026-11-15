@@ -40,6 +40,7 @@ import {
   getCheckInWindow,
 } from '../../utils/timeCalculations';
 import { AttendanceRulesConfig } from '../../types';
+import { SafeImg } from '../common/SafeImg';
 
 interface GuardAttendanceTerminalProps {
   guardSession: CurrentUserSession;
@@ -704,7 +705,7 @@ export const GuardAttendanceTerminal: React.FC<GuardAttendanceTerminalProps> = (
                 {insideFactoryWorkers.map(({ worker, attendance }) => (
                   <tr key={worker.id} className="hover:bg-slate-800/50 transition-colors">
                     <td className="py-3 px-4 flex items-center gap-3">
-                      <img
+                      <SafeImg
                         src={worker.profilePhoto}
                         alt={worker.fullName}
                         className="w-9 h-9 rounded-full object-cover border border-slate-700"
@@ -834,7 +835,7 @@ export const GuardAttendanceTerminal: React.FC<GuardAttendanceTerminalProps> = (
                 </span>
                 <div className="rounded-xl overflow-hidden border-2 border-emerald-500/50 bg-black aspect-video flex items-center justify-center">
                   {viewingPhotoRecord.checkInPhoto ? (
-                    <img
+                    <SafeImg
                       src={viewingPhotoRecord.checkInPhoto}
                       alt="Check-in Photo"
                       className="w-full h-full object-cover"
@@ -851,7 +852,7 @@ export const GuardAttendanceTerminal: React.FC<GuardAttendanceTerminalProps> = (
                     Live Check-Out Photo
                   </span>
                   <div className="rounded-xl overflow-hidden border-2 border-blue-500/50 bg-black aspect-video flex items-center justify-center">
-                    <img
+                    <SafeImg
                       src={viewingPhotoRecord.checkOutPhoto}
                       alt="Check-out Photo"
                       className="w-full h-full object-cover"

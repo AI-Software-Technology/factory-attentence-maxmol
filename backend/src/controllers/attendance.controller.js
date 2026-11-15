@@ -2,8 +2,10 @@ import { asyncHandler, HttpError } from '../utils/httpError.js';
 import * as svc from '../services/attendance.service.js';
 
 export const list = asyncHandler(async (req, res) => {
-  const { date, month, from, to, workerId, status } = req.query;
-  res.json(await svc.getAttendance({ date, month, from, to, workerId, status }));
+  const { date, month, from, to, workerId, status, includeAbsent } = req.query;
+  // includeAbsent is for admin screens only (guard terminal must see real punches only)
+  const withAbsent = String(includeAbsent) === 'true' && req.user?.role === 'ADMIN';
+  res.json(await svc.getAttendance({ date, month, from, to, workerId, status }, { includeAbsent: withAbsent }));
 });
 
 export const checkIn = asyncHandler(async (req, res) => {

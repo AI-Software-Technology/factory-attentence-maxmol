@@ -30,6 +30,7 @@ import {
   workingTimeFilterOptions,
 } from '../../utils/timeCalculations';
 import { getTodayDateString } from '../../utils/dateUtils';
+import { SafeImg } from '../common/SafeImg';
 
 interface LiveAttendanceViewProps {
   workers: Worker[];
@@ -50,8 +51,11 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWorkingTime, setSelectedWorkingTime] = useState('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<
-    'ALL' | 'PRESENT' | 'LATE' | 'OT' | 'ABSENT' | 'COMPLETED'
+    'ALL' | 'PRESENT' | 'LATE' | 'OT' | 'ABSENT' | 'COMPLETED' | 'HOLIDAY'
   >('ALL');
+
+  // Attendance rows keep a photo URL; fall back to the worker's profile photo when a row has none
+  const workerById = useMemo(() => new Map(workers.map(w => [w.id, w])), [workers]);
 
   // Photo Inspection Modal
   const [inspectRecord, setInspectRecord] = useState<AttendanceRecord | null>(null);
@@ -59,6 +63,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
   // Admin edit / add / re-open / delete (all need a reason, all audited)
   const [editRecord, setEditRecord] = useState<AttendanceRecord | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [addFor, setAddFor] = useState<{ workerId: string; date: string } | null>(null);
   const [reasonAction, setReasonAction] = useState<{ kind: 'delete' | 'reopen'; record: AttendanceRecord } | null>(null);
   const [notice, setNotice] = useState<string>('');
   const [rules, setRules] = useState<AttendanceRulesConfig | null>(null);
@@ -69,7 +74,10 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
   // Only fetch the selected day / range (not the whole history)
   const loadAttendance = async () => {
     try {
-      const data = await ApiService.getAttendance(useDateRange ? { from: startDate, to: endDate } : { date: selectedDate });
+      // includeAbsent: workers with no check-in (after shift start + grace) are listed as ABSENT
+      const data = await ApiService.getAttendance(
+        useDateRange ? { from: startDate, to: endDate, includeAbsent: true } : { date: selectedDate, includeAbsent: true }
+      );
       setAttendanceList(data);
     } catch (err: any) {
       alert(err.message || 'Failed to load attendance.');
@@ -88,6 +96,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
   const handleChanged = async (note: string) => {
     setEditRecord(null);
     setShowAdd(false);
+    setAddFor(null);
     setReasonAction(null);
     setNotice(note);
     await loadAttendance();
@@ -110,26 +119,31 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
         return false;
       }
 
-      // Status filters: PRESENT, LATE, OT, ABSENT, COMPLETED
+      // Status filters (work on real punches AND on the auto absent / holiday rows)
+      const late = (record.lateMinutes || 0) > 0 || record.status === 'PRESENT - LATE';
+      const ot = (record.overtimeMinutes || 0) > 0 || record.status === 'PRESENT + OT';
+      const absent = record.status === 'ABSENT' || record.status === 'NOT_ARRIVED';
       if (selectedStatusFilter === 'PRESENT') {
-        if (record.status !== 'PRESENT') return false;
+        if (absent || record.status === 'HOLIDAY' || !record.checkInTime) return false;
       } else if (selectedStatusFilter === 'LATE') {
-        if (record.lateMinutes <= 0 && record.status !== 'PRESENT - LATE') return false;
+        if (!late) return false;
       } else if (selectedStatusFilter === 'OT') {
-        if (record.overtimeMinutes <= 0 && record.status !== 'PRESENT + OT') return false;
+        if (!ot) return false;
       } else if (selectedStatusFilter === 'ABSENT') {
-        if (record.status !== 'ABSENT') return false;
+        if (!absent) return false;
       } else if (selectedStatusFilter === 'COMPLETED') {
         if (record.status !== 'COMPLETED') return false;
+      } else if (selectedStatusFilter === 'HOLIDAY') {
+        if (record.status !== 'HOLIDAY') return false;
       }
 
       // Search by Worker Name, Employee ID, or Guard Name
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
-          record.workerName.toLowerCase().includes(q) ||
-          record.workerEmployeeId.toLowerCase().includes(q) ||
-          record.checkInMarkedByGuardName.toLowerCase().includes(q)
+          (record.workerName || '').toLowerCase().includes(q) ||
+          (record.workerEmployeeId || '').toLowerCase().includes(q) ||
+          (record.checkInMarkedByGuardName || '').toLowerCase().includes(q)
         );
       }
 
@@ -145,6 +159,19 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
     selectedStatusFilter,
     searchQuery,
   ]);
+
+  const counts = useMemo(() => {
+    const c = { present: 0, late: 0, absent: 0, holiday: 0 };
+    filteredRecords.forEach(r => {
+      if (r.status === 'ABSENT' || r.status === 'NOT_ARRIVED') c.absent++;
+      else if (r.status === 'HOLIDAY') c.holiday++;
+      else if (r.checkInTime) {
+        c.present++;
+        if ((r.lateMinutes || 0) > 0) c.late++;
+      }
+    });
+    return c;
+  }, [filteredRecords]);
 
   const handleOpenEdit = (record: AttendanceRecord) => setEditRecord(record);
 
@@ -172,13 +199,13 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
       r.workerEmployeeId,
       `"${r.workingTime}"`,
       r.checkInTime || '',
-      `"${r.checkInMarkedByGuardName}"`,
-      `"${r.checkInGate}"`,
-      r.lateMinutes,
+      `"${r.checkInMarkedByGuardName || ''}"`,
+      `"${r.checkInGate || ''}"`,
+      r.lateMinutes || 0,
       r.checkOutTime || '',
       `"${r.checkOutMarkedByGuardName || ''}"`,
-      r.totalWorkingMinutes,
-      r.overtimeMinutes,
+      r.totalWorkingMinutes || 0,
+      r.overtimeMinutes || 0,
       r.status,
     ]);
 
@@ -306,11 +333,12 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-500"
             >
               <option value="ALL">All Attendance Statuses</option>
-              <option value="PRESENT">Present (On-Time)</option>
+              <option value="PRESENT">Present (Checked-In)</option>
               <option value="LATE">Late Arrival</option>
               <option value="OT">Overtime (OT)</option>
               <option value="COMPLETED">Completed (Checked Out)</option>
               <option value="ABSENT">Absent Worker</option>
+              <option value="HOLIDAY">Holiday (Paid)</option>
             </select>
           </div>
 
@@ -330,6 +358,26 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
               />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Quick counts for the selected filters */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-slate-900 border border-emerald-900/60 rounded-xl px-4 py-3">
+          <span className="text-[11px] font-semibold text-emerald-400 uppercase block">Present</span>
+          <span className="text-2xl font-black text-emerald-400">{counts.present}</span>
+        </div>
+        <div className="bg-slate-900 border border-amber-900/60 rounded-xl px-4 py-3">
+          <span className="text-[11px] font-semibold text-amber-300 uppercase block">Late</span>
+          <span className="text-2xl font-black text-amber-300">{counts.late}</span>
+        </div>
+        <div className="bg-slate-900 border border-rose-900/60 rounded-xl px-4 py-3">
+          <span className="text-[11px] font-semibold text-rose-400 uppercase block">Absent</span>
+          <span className="text-2xl font-black text-rose-400">{counts.absent}</span>
+        </div>
+        <div className="bg-slate-900 border border-purple-900/60 rounded-xl px-4 py-3">
+          <span className="text-[11px] font-semibold text-purple-300 uppercase block">Holiday</span>
+          <span className="text-2xl font-black text-purple-300">{counts.holiday}</span>
         </div>
       </div>
 
@@ -372,8 +420,8 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                     {/* Worker Profile Photo & Name */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={record.workerPhoto}
+                        <SafeImg
+                          src={record.workerPhoto || workerById.get(record.workerId)?.profilePhoto}
                           alt={record.workerName}
                           className="w-10 h-10 rounded-xl object-cover border border-slate-700 shrink-0"
                         />
@@ -407,7 +455,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                             className="relative group w-12 h-12 rounded-lg overflow-hidden border border-emerald-600/50 bg-black shrink-0 cursor-pointer"
                             title="Click to zoom Live Check-In Photo with Timestamp"
                           >
-                            <img
+                            <SafeImg
                               src={record.checkInPhoto}
                               alt="Check-in Photo"
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform"
@@ -421,7 +469,13 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                           <div className="font-mono font-bold text-white text-xs">
                             {record.checkInTime || '--:--'}
                           </div>
-                          {record.lateMinutes > 0 ? (
+                          {!record.checkInTime ? (
+                            record.status === 'HOLIDAY' ? (
+                              <span className="text-[10px] text-purple-300 block">Holiday</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-rose-400 block">Not Arrived</span>
+                            )
+                          ) : record.lateMinutes > 0 ? (
                             <span className="text-[10px] font-bold text-rose-400 bg-rose-950/80 px-1 rounded border border-rose-800 block w-fit">
                               +{formatMinutesToReadable(record.lateMinutes)} Late
                             </span>
@@ -444,7 +498,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                               className="relative group w-12 h-12 rounded-lg overflow-hidden border border-blue-600/50 bg-black shrink-0 cursor-pointer"
                               title="Click to zoom Live Check-Out Photo"
                             >
-                              <img
+                              <SafeImg
                                 src={record.checkOutPhoto}
                                 alt="Check-out Photo"
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
@@ -460,6 +514,8 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                             </span>
                           </div>
                         </div>
+                      ) : !record.checkInTime ? (
+                        <span className="text-xs text-slate-500">--</span>
                       ) : (
                         <span className="text-xs text-amber-400 font-medium">
                           Inside Plant
@@ -498,9 +554,13 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                             ? 'bg-amber-950 text-amber-300 border border-amber-800'
                             : record.status === 'COMPLETED'
                             ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                            : record.status === 'ABSENT' || record.status === 'NOT_ARRIVED'
+                            ? 'bg-rose-950 text-rose-300 border border-rose-700'
+                            : record.status === 'HOLIDAY'
+                            ? 'bg-purple-950 text-purple-300 border border-purple-700'
                             : 'bg-slate-800 text-slate-300'
                         }`}>
-                          {record.status}
+                          {record.status === 'NOT_ARRIVED' ? 'ABSENT' : record.status}
                         </span>
 
                         {record.isManuallyModified && (
@@ -524,6 +584,19 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                     {/* Details Action */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {record.virtual ? (
+                          record.status === 'ABSENT' && (
+                            <button
+                              onClick={() => setAddFor({ workerId: record.workerId, date: record.date })}
+                              className="px-2.5 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Worker was present but the guard missed the punch: add attendance"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Mark Present</span>
+                            </button>
+                          )
+                        ) : (
+                          <>
                         <button
                           onClick={() => setInspectRecord(record)}
                           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
@@ -558,6 +631,8 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                          </>
+                        )}
                       </div>
                     </td>
 
@@ -600,7 +675,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                 </span>
                 <div className="rounded-xl overflow-hidden border-2 border-emerald-500/60 bg-black aspect-video flex items-center justify-center">
                   {inspectRecord.checkInPhoto ? (
-                    <img
+                    <SafeImg
                       src={inspectRecord.checkInPhoto}
                       alt="Check-in Photo"
                       className="w-full h-full object-cover"
@@ -622,7 +697,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                 </span>
                 <div className="rounded-xl overflow-hidden border-2 border-blue-500/60 bg-black aspect-video flex items-center justify-center">
                   {inspectRecord.checkOutPhoto ? (
-                    <img
+                    <SafeImg
                       src={inspectRecord.checkOutPhoto}
                       alt="Check-out Photo"
                       className="w-full h-full object-cover"
@@ -696,6 +771,16 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
 
       {editRecord && (
         <EditAttendanceModal record={editRecord} rules={rules} onClose={() => setEditRecord(null)} onSaved={handleChanged} />
+      )}
+      {addFor && (
+        <AddAttendanceModal
+          workers={workers}
+          defaultDate={addFor.date}
+          defaultWorkerId={addFor.workerId}
+          rules={rules}
+          onClose={() => setAddFor(null)}
+          onSaved={handleChanged}
+        />
       )}
       {showAdd && (
         <AddAttendanceModal

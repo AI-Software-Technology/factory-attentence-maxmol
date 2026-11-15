@@ -3,7 +3,7 @@ import { addAuditLog } from './audit.service.js';
 import { HttpError } from '../utils/httpError.js';
 import { genId } from '../utils/dateUtils.js';
 import { validateWorkingTime } from '../utils/timeCalculations.js';
-import { normalizePhoto, deletePhoto, isLocalPhoto, saveDocumentFile, deleteDocumentFile } from '../utils/photoStore.js';
+import { savePhoto, isDataUrl, normalizePhoto, deletePhoto, isLocalPhoto, saveDocumentFile, deleteDocumentFile } from '../utils/photoStore.js';
 import { cached, bump } from '../utils/cache.js';
 
 function checkWorkingTime(label) {
@@ -270,4 +270,34 @@ export async function cleanupPlaceholderDocuments() {
     }
   }
   if (fixed) console.log(`[Cleanup] Removed placeholder documents from ${fixed} workers`);
+}
+
+/**
+ * Boot-time, idempotent: worker profile photos still stored as base64 inside MongoDB are stripped from API
+ * responses (to keep them fast), so the image shows as broken. Move each one to disk once and store the URL.
+ * One worker at a time, never throws.
+ */
+export async function migrateLegacyProfilePhotos() {
+  try {
+    const ids = await Worker.find({ profilePhoto: { $regex: '^data:image/' } }).select('id').lean();
+    if (!ids.length) return 0;
+    let done = 0;
+    for (const { id } of ids) {
+      try {
+        const w = await Worker.findOne({ id }).select('profilePhoto').lean();
+        if (!w || !isDataUrl(w.profilePhoto)) continue;
+        const url = await savePhoto(w.profilePhoto, 'profile');
+        await Worker.updateOne({ id }, { $set: { profilePhoto: url } });
+        done++;
+      } catch (e) {
+        console.warn(`[PhotoMigrate] worker ${id}: ${e.message}`);
+      }
+    }
+    if (done) await bump('workers', 'att');
+    console.log(`[PhotoMigrate] ${done}/${ids.length} legacy profile photos moved to disk.`);
+    return done;
+  } catch (e) {
+    console.warn('[PhotoMigrate] skipped:', e.message);
+    return 0;
+  }
 }

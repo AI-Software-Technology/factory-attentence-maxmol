@@ -86,3 +86,19 @@ export async function toggleGuardStatus(id) {
   await guard.save();
   return getGuardById(id);
 }
+
+
+/** Permanently delete a guard login. Attendance already marked keeps the guard's name/ID as text. */
+export async function deleteGuard(id, actor) {
+  const guard = await Guard.findOne({ id }).lean();
+  if (!guard) return null;
+  await Guard.deleteOne({ id });
+  await addAuditLog({
+    actorRole: 'ADMIN',
+    actorId: actor?.id || 'admin',
+    actorName: actor?.name || 'System Admin',
+    actionType: 'GUARD_DELETED',
+    details: `Guard account DELETED: ${guard.fullName} (${guard.guardId}, ${guard.gateAssigned || 'no gate'}). Past attendance marked by this guard is unchanged.`,
+  });
+  return { success: true, id };
+}

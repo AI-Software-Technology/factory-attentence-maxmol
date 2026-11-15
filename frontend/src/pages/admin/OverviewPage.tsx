@@ -7,15 +7,38 @@ import {
   Coins,
   Sliders,
   UserCheck,
+  UserX,
   ArrowRight,
 } from 'lucide-react';
 import { ApiService } from '../../services/api';
 import { formatCurrency } from '../../utils/timeCalculations';
 import { useAdminData } from '../../layouts/AdminLayout';
+import { AttendanceRecord } from '../../types';
+import { SafeImg } from '../../components/common/SafeImg';
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { workers, guards, attendanceToday, refresh } = useAdminData();
+
+  // Today's absent workers: workers with no check-in once shift start + grace is over (server calculated)
+  const [absentToday, setAbsentToday] = React.useState<AttendanceRecord[]>([]);
+  const [holidayToday, setHolidayToday] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    ApiService.getDashboardStats()
+      .then((d: any) => {
+        if (!alive) return;
+        setAbsentToday(Array.isArray(d?.absentTodayList) ? d.absentTodayList : []);
+        setHolidayToday(Boolean(d?.holidayToday));
+        setAbsentCount(Number(d?.absentToday) || 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [attendanceToday]);
+  const [absentCount, setAbsentCount] = React.useState(0);
+  const workerById = React.useMemo(() => new Map(workers.map(w => [w.id, w])), [workers]);
 
   // Quick stats
   const insideCount = attendanceToday.filter(a => a.checkInTime && !a.checkOutTime).length;
@@ -28,7 +51,7 @@ export const OverviewPage: React.FC = () => {
         <div className="space-y-6">
           
           {/* Top Quick Status Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
@@ -53,6 +76,19 @@ export const OverviewPage: React.FC = () => {
               </div>
               <p className="text-xs text-slate-400 mt-2">
                 {checkedInCount} checked in today • {lateCount} arrived late
+              </p>
+            </div>
+
+            <div className="bg-slate-900 border border-rose-800/60 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-rose-950/30">
+              <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider block">
+                Absent Today
+              </span>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className="text-3xl font-black text-rose-400">{holidayToday ? 0 : absentCount}</span>
+                <UserX className="w-5 h-5 text-rose-400" />
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                {holidayToday ? 'Factory holiday today' : 'Not arrived after shift start + grace time'}
               </p>
             </div>
 
@@ -191,6 +227,37 @@ export const OverviewPage: React.FC = () => {
 
           </div>
 
+          {/* Today's absent workers */}
+          {absentToday.length > 0 && !holidayToday && (
+            <div className="bg-slate-900 border border-rose-900/60 rounded-2xl overflow-hidden shadow-xl">
+              <div className="bg-rose-950/40 px-6 py-3 flex items-center justify-between border-b border-rose-900/60">
+                <h3 className="font-bold text-rose-300 text-sm">Absent Today ({absentCount})</h3>
+                <button
+                  onClick={() => navigate('/admin/attendance')}
+                  className="text-xs text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Full list</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-4 flex flex-wrap gap-2">
+                {absentToday.map(r => (
+                  <span key={r.id} className="inline-flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-full pl-1 pr-3 py-1 text-xs text-slate-200">
+                    <SafeImg
+                      src={r.workerPhoto || workerById.get(r.workerId)?.profilePhoto}
+                      alt={r.workerName}
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                    {r.workerName} <span className="text-slate-500 font-mono">{r.workerEmployeeId}</span>
+                  </span>
+                ))}
+                {absentCount > absentToday.length && (
+                  <span className="text-xs text-slate-500 self-center">+{absentCount - absentToday.length} more</span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Today's Attendance Snapshot Table */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="bg-slate-800/80 px-6 py-4 flex items-center justify-between border-b border-slate-700">
@@ -222,8 +289,8 @@ export const OverviewPage: React.FC = () => {
                   {attendanceToday.slice(0, 5).map(r => (
                     <tr key={r.id} className="hover:bg-slate-800/40">
                       <td className="py-2.5 px-4 font-medium text-white flex items-center gap-2">
-                        <img
-                          src={r.workerPhoto}
+                        <SafeImg
+                          src={r.workerPhoto || workerById.get(r.workerId)?.profilePhoto}
                           alt={r.workerName}
                           className="w-7 h-7 rounded-full object-cover border border-slate-700"
                         />

@@ -27,6 +27,7 @@ import {
   applyOtThreshold,
 } from '../../utils/timeCalculations';
 import { DurationInput } from '../common/DurationInput';
+import { SafeImg } from '../common/SafeImg';
 
 interface CameraCaptureModalProps {
   mode: 'CHECK_IN' | 'CHECK_OUT';
@@ -484,7 +485,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
               </div>
 
               <div className="relative w-36 h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-xl overflow-hidden border-2 border-sky-500/30 shadow-inner bg-slate-900 flex items-center justify-center">
-                <img
+                <SafeImg
                   src={worker.profilePhoto}
                   alt={worker.fullName}
                   className="w-full h-full object-cover"
@@ -540,7 +541,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
               <div className="camera-surface relative w-full aspect-[4/3] sm:aspect-auto sm:h-56 rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-black flex items-center justify-center">
                 {capturedPhoto ? (
-                  <img
+                  <SafeImg
                     src={capturedPhoto}
                     alt="Captured Live Photo with Timestamp"
                     className="w-full h-full object-contain bg-black"

@@ -123,7 +123,7 @@ const AttendanceSchema = new Schema(
     otManuallyAdjusted: Boolean,
     status: {
       type: String,
-      enum: ['PRESENT', 'PRESENT - LATE', 'PRESENT + OT', 'COMPLETED', 'ABSENT', 'NOT_ARRIVED'],
+      enum: ['PRESENT', 'PRESENT - LATE', 'PRESENT + OT', 'COMPLETED', 'ABSENT', 'NOT_ARRIVED', 'HOLIDAY'],
       default: 'PRESENT',
     },
     createdAt: String,
@@ -174,6 +174,10 @@ const PayrollSchema = new Schema(
     totalDaysInMonth: Number,
     daysPresent: Number,
     daysAbsent: Number,
+    daysAttended: Number,
+    daysHoliday: Number,
+    pendingDays: Number, // days of the 30-day basis not payable yet (running month / before joining)
+    pendingDeduction: Number,
     absentDeduction: Number,
     totalLateMinutes: Number,
     totalLateDeduction: Number,
@@ -298,6 +302,18 @@ const WorkingShiftSchema = new Schema(
   baseOptions
 );
 
+// ================= HOLIDAY (factory off day: every worker is marked PRESENT, paid) =================
+const HolidaySchema = new Schema(
+  {
+    id: idField,
+    date: { type: String, required: true, unique: true, index: true }, // YYYY-MM-DD
+    title: { type: String, default: 'Holiday' },
+    createdAt: String,
+    createdBy: String,
+  },
+  baseOptions
+);
+
 // ================= COUNTER (ordering sequence) =================
 const CounterSchema = new Schema({ _id: String, value: { type: Number, default: 0 } }, { versionKey: false });
 
@@ -313,6 +329,7 @@ export const AuditLog = model('AuditLog', AuditLogSchema);
 export const Counter = model('Counter', CounterSchema);
 export const WorkerFile = model('WorkerFile', WorkerFileSchema);
 export const WorkingShift = model('WorkingShift', WorkingShiftSchema);
+export const Holiday = model('Holiday', HolidaySchema);
 
 export async function nextSeq(name) {
   const c = await Counter.findByIdAndUpdate(name, { $inc: { value: 1 } }, { new: true, upsert: true });

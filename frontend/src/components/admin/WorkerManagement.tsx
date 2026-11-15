@@ -27,6 +27,7 @@ import { ApiService } from '../../services/api';
 import { WorkerDocumentsModal, WorkerDocumentList, DocumentViewerModal } from './WorkerDocuments';
 import { formatCurrency, workingTimeFilterOptions, validateWorkingTime } from '../../utils/timeCalculations';
 import { WorkingTimePicker } from '../common/WorkingTimePicker';
+import { SafeImg } from '../common/SafeImg';
 
 interface WorkerManagementProps {
   onDataChanged: () => void;
@@ -373,7 +374,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({
                   {/* Photo & Name */}
                   <td className="py-3 px-4 flex items-center gap-3">
                     <div className="relative group w-11 h-11 rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-800 shrink-0">
-                      <img
+                      <SafeImg
                         src={w.profilePhoto}
                         alt={w.fullName}
                         className="w-full h-full object-cover"
@@ -497,7 +498,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({
 
                 <div className="flex items-center gap-4">
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-emerald-500/50 bg-slate-900 shadow-md shrink-0">
-                    <img
+                    <SafeImg
                       src={formData.profilePhoto}
                       alt="Profile Preview"
                       className="w-full h-full object-cover"
@@ -748,7 +749,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
-                <img
+                <SafeImg
                   src={viewingProfileWorker.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'}
                   alt=""
                   className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500/50 shadow-md"

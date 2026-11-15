@@ -100,7 +100,10 @@ export interface AttendanceRecord {
   otManuallyAdjusted?: boolean;
   
   // Status: Present, Present - Late, Present + OT, Completed, Absent
-  status: 'PRESENT' | 'PRESENT - LATE' | 'PRESENT + OT' | 'COMPLETED' | 'ABSENT' | 'NOT_ARRIVED';
+  status: 'PRESENT' | 'PRESENT - LATE' | 'PRESENT + OT' | 'COMPLETED' | 'ABSENT' | 'NOT_ARRIVED' | 'HOLIDAY';
+
+  // true = built by the server for a worker with no check-in (ABSENT / HOLIDAY); nothing is stored yet
+  virtual?: boolean;
   
   // Audit info
   createdAt: string;
@@ -146,6 +149,10 @@ export interface PayrollRecord {
   totalDaysInMonth: number; // 30
   daysPresent: number;
   daysAbsent: number;
+  daysAttended?: number; // days with a check-in
+  daysHoliday?: number; // factory holidays (paid, counted present)
+  pendingDays?: number; // days of the 30-day basis not payable yet (running month / before joining)
+  pendingDeduction?: number;
   absentDeduction: number; // daysAbsent * dailyWage
   
   totalLateMinutes: number;
@@ -257,6 +264,7 @@ export interface ReportSummaryMetrics {
   totalWorkers: number;
   totalPresentDays: number;
   totalAbsentDays: number;
+  totalAbsentDeductions?: number;
   totalLateMinutes: number;
   totalLateDeductions: number;
   totalOtMinutes: number;
@@ -279,6 +287,7 @@ export interface SystemAuditLog {
     | 'WORKER_CREATED'
     | 'WORKER_UPDATED'
     | 'GUARD_CREATED'
+    | 'GUARD_DELETED'
     | 'RULES_UPDATED'
     | 'ATTENDANCE_OVERRIDE'
     | 'ATTENDANCE_ADDED'
@@ -324,4 +333,13 @@ export interface WorkingShift {
   dutyTitle: string; // "8 Hours Duty"
   updatedAt?: string;
   updatedBy?: string;
+}
+
+/** Factory holiday: every worker is marked present (paid) on this date */
+export interface Holiday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  createdAt?: string;
+  createdBy?: string;
 }

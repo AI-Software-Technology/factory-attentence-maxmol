@@ -1,6 +1,6 @@
 import { Worker, Guard } from '../models/index.js';
 import { getAttendance } from './attendance.service.js';
-import { getPayroll } from './payroll.service.js';
+import { recalculatePayroll } from './payroll.service.js';
 import { getRules } from './rules.service.js';
 import { getAuditLogs } from './audit.service.js';
 import { round2 } from '../utils/dateUtils.js';
@@ -8,8 +8,10 @@ import { getWorkingTimeDetails } from '../utils/timeCalculations.js';
 
 export async function getReports(month) {
   const workers = await Worker.find().sort({ seq: 1 }).lean();
-  const attendance = await getAttendance({ month }, { withPhotos: false });
-  const payroll = await getPayroll(month);
+  // includeAbsent: workers with no check-in after shift start + grace show up as ABSENT (HOLIDAY = paid off day)
+  const attendance = await getAttendance({ month }, { withPhotos: false, includeAbsent: true });
+  // live numbers (nothing is written); paid status / bonus adjustments are carried over
+  const payroll = await recalculatePayroll(month, null, { dryRun: true });
   const rules = await getRules();
 
   // 1. Late Attendance Records
@@ -56,7 +58,8 @@ export async function getReports(month) {
         guardName: a.checkInMarkedByGuardName || 'System',
         recordSource: a.recordSource || 'seed',
       };
-    });
+    })
+    .sort((x, y) => String(y.date).localeCompare(String(x.date)) || String(x.workerName).localeCompare(String(y.workerName)));
 
   // 3. Overtime (OT) Records
   const otRecords = attendance
@@ -92,6 +95,7 @@ export async function getReports(month) {
     totalWorkers: workers.length,
     totalPresentDays: sum('daysPresent'),
     totalAbsentDays: sum('daysAbsent'),
+    totalAbsentDeductions: round2(sum('absentDeduction')),
     totalLateMinutes: sum('totalLateMinutes'),
     totalLateDeductions: round2(sum('totalLateDeduction')),
     totalOtMinutes: sum('totalOtMinutes'),
@@ -109,13 +113,15 @@ export async function getDashboardStats(dateStr, monthStr) {
   const workers = await Worker.find().select('monthlySalary').lean();
   const guards = await Guard.find().select('status').lean();
   const todayAttendance = await getAttendance({ date: dateStr });
+  const dayRoll = await getAttendance({ date: dateStr }, { includeAbsent: true });
 
   const totalWorkers = workers.length;
   const insideFactory = todayAttendance.filter(a => a.checkInTime && !a.checkOutTime).length;
   const checkedInToday = todayAttendance.filter(a => Boolean(a.checkInTime)).length;
   const lateToday = todayAttendance.filter(a => (a.lateMinutes || 0) > 0).length;
   const completedToday = todayAttendance.filter(a => Boolean(a.checkOutTime)).length;
-  const absentToday = todayAttendance.filter(a => a.status === 'ABSENT').length;
+  const absentToday = dayRoll.filter(a => a.status === 'ABSENT').length;
+  const holidayToday = dayRoll.some(a => a.status === 'HOLIDAY');
   const activeGuards = guards.filter(g => g.status === 'ACTIVE').length;
   const totalWageLiability = workers.reduce((s, w) => s + (w.monthlySalary || 0), 0);
 
@@ -128,6 +134,8 @@ export async function getDashboardStats(dateStr, monthStr) {
     lateToday,
     completedToday,
     absentToday,
+    holidayToday,
+    absentTodayList: dayRoll.filter(a => a.status === 'ABSENT').slice(0, 10),
     activeGuards,
     totalWageLiability,
     todayRoll: todayAttendance.slice(0, 10),

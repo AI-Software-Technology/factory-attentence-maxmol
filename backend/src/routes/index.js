@@ -11,6 +11,7 @@ import * as shifts from '../controllers/shift.controller.js';
 import * as payroll from '../controllers/payroll.controller.js';
 import * as advances from '../controllers/advance.controller.js';
 import * as reports from '../controllers/report.controller.js';
+import * as holidays from '../controllers/holiday.controller.js';
 import { env } from '../config/env.js';
 
 const router = Router();
@@ -58,6 +59,7 @@ router.get('/guards', ADMIN, guards.list);
 router.post('/guards', ADMIN, guards.create);
 router.put('/guards/:id', ADMIN, guards.update);
 router.patch('/guards/:id/status', ADMIN, guards.toggleStatus);
+router.delete('/guards/:id', ADMIN, guards.remove);
 
 // Attendance
 router.get('/attendance', STAFF, attendance.list);
@@ -76,6 +78,11 @@ router.put('/rules', ADMIN, rules.update);
 // Standard working times (editable)
 router.get('/shifts', STAFF, shifts.list);
 router.put('/shifts/:id', ADMIN, shifts.update);
+
+// Holidays (factory off days -> everyone present)
+router.get('/holidays', STAFF, holidays.list);
+router.post('/holidays', ADMIN, holidays.add);
+router.delete('/holidays/:date', ADMIN, holidays.remove);
 
 // Payroll
 router.get('/payroll', ADMIN, payroll.list);

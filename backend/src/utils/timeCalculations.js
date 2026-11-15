@@ -252,7 +252,8 @@ function calculateSalaryBreakdown({
   totalEarlyExitMinutes = 0,
   totalOtMinutes,
   otRateMultiplier = 1,
-  advanceDeduction = 0
+  advanceDeduction = 0,
+  pendingDays = 0
 }) {
   const details = getWorkingTimeDetails(workingTime);
   const salaryBasisDays = 30;
@@ -260,12 +261,14 @@ function calculateSalaryBreakdown({
   const normalWorkingMinutes = details.normalWorkingMinutes;
   const perMinuteSalary = perDaySalary / normalWorkingMinutes;
   const absentDeduction = Math.round(daysAbsent * perDaySalary * 100) / 100;
+  // days of the 30-day basis that are not over yet (running month) / before joining -> not payable yet
+  const pendingDeduction = Math.round(Math.max(0, pendingDays) * perDaySalary * 100) / 100;
   const lateDeduction = Math.round(totalLateMinutes * perMinuteSalary * 100) / 100;
   const earlyExitDeduction = Math.round(totalEarlyExitMinutes * perMinuteSalary * 100) / 100;
   const otAmount = Math.round(totalOtMinutes * (perMinuteSalary * otRateMultiplier) * 100) / 100;
   const grossPayableBeforeAdvance = Math.max(
     0,
-    Math.round((monthlySalary - absentDeduction - lateDeduction - earlyExitDeduction + otAmount) * 100) / 100
+    Math.round((monthlySalary - pendingDeduction - absentDeduction - lateDeduction - earlyExitDeduction + otAmount) * 100) / 100
   );
   const actualAdvanceDeducted = Math.min(advanceDeduction, grossPayableBeforeAdvance);
   const advanceCarriedForward = Math.max(0, Math.round((advanceDeduction - actualAdvanceDeducted) * 100) / 100);
@@ -282,6 +285,8 @@ function calculateSalaryBreakdown({
     daysPresent,
     daysAbsent,
     absentDeduction,
+    pendingDays: Math.max(0, pendingDays),
+    pendingDeduction,
     totalLateMinutes,
     lateDeduction,
     totalEarlyExitMinutes,

@@ -41,6 +41,7 @@ import {
 import { ApiService } from '../../services/api';
 import { getCurrentMonth, getTodayDateString } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/timeCalculations';
+import { SafeImg } from '../common/SafeImg';
 
 interface AdvanceSalaryManagementProps {
   session: CurrentUserSession;
@@ -712,7 +713,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
                           {workers.find(w => w.id === adv.workerId)?.profilePhoto ? (
-                            <img
+                            <SafeImg
                               src={workers.find(w => w.id === adv.workerId)?.profilePhoto}
                               alt=""
                               className="w-7 h-7 rounded-full object-cover border border-slate-700"
@@ -930,7 +931,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
                             {workers.find(w => w.id === adv.workerId)?.profilePhoto ? (
-                              <img
+                              <SafeImg
                                 src={workers.find(w => w.id === adv.workerId)?.profilePhoto}
                                 alt=""
                                 className="w-8 h-8 rounded-full object-cover border border-slate-700"
@@ -1098,7 +1099,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
                 {/* Worker Header */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <img
+                    <SafeImg
                       src={item.worker.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
                       alt=""
                       className="w-12 h-12 rounded-full object-cover border border-slate-700"
@@ -1293,7 +1294,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
                           className="p-2.5 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition-colors"
                         >
                           <div className="flex items-center gap-2.5">
-                            <img
+                            <SafeImg
                               src={w.profilePhoto}
                               alt=""
                               className="w-8 h-8 rounded-full object-cover border border-slate-700"
@@ -1315,7 +1316,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
                   /* Worker Selected Badge */
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img
+                      <SafeImg
                         src={selectedWorker?.profilePhoto}
                         alt=""
                         className="w-10 h-10 rounded-full object-cover border border-slate-700"
@@ -1668,7 +1669,7 @@ export const AdvanceSalaryManagement: React.FC<AdvanceSalaryManagementProps> = (
             
             <div className="flex items-start justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
-                <img
+                <SafeImg
                   src={selectedWorkerHistory.profilePhoto}
                   alt=""
                   className="w-12 h-12 rounded-full object-cover border border-slate-700"

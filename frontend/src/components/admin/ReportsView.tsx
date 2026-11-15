@@ -280,7 +280,7 @@ export const ReportsView: React.FC<ReportsViewProps> = () => {
               {summary.totalAbsentDays} Days
             </span>
             <span className="text-[11px] text-slate-400 block mt-0.5 font-mono">
-              Cut: -{formatCurrency(summary.totalLateDeductions ? (summary.totalAbsentDays * 500) : 0, true)} (1d = Monthly÷30)
+              Cut: -{formatCurrency(summary.totalAbsentDeductions || 0, true)} (1d = Monthly÷30)
             </span>
           </div>
 
@@ -564,7 +564,7 @@ export const ReportsView: React.FC<ReportsViewProps> = () => {
                 <tr>
                   <th className="py-3 px-4">Worker & Working Time</th>
                   <th className="py-3 px-4">Monthly Salary (30d)</th>
-                  <th className="py-3 px-4">Days Present / 30</th>
+                  <th className="py-3 px-4">Days Present</th>
                   <th className="py-3 px-4 text-rose-400">Absent Deduction</th>
                   <th className="py-3 px-4 text-amber-400">Late Deduction</th>
                   <th className="py-3 px-4 text-sky-400">OT Pay Added</th>
@@ -595,8 +595,10 @@ export const ReportsView: React.FC<ReportsViewProps> = () => {
                         </div>
                       </td>
                       <td className="py-3 px-4 font-mono text-xs">
-                        <span className="text-emerald-400 font-bold">{r.daysPresent}</span> / 30 Days
+                        <span className="text-emerald-400 font-bold">{r.daysPresent}</span> Present
+                        {(r.daysHoliday || 0) > 0 && <span className="block text-[11px] text-purple-300 font-medium">({r.daysHoliday} Holiday)</span>}
                         {r.daysAbsent > 0 && <span className="block text-[11px] text-rose-400 font-medium">({r.daysAbsent} Absent)</span>}
+                        {(r.pendingDays || 0) > 0 && <span className="block text-[11px] text-slate-400 font-medium">({r.pendingDays} days pending)</span>}
                       </td>
                       <td className="py-3 px-4 font-mono text-xs">
                         {r.absentDeduction > 0 ? (

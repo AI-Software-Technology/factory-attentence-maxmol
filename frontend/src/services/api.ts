@@ -12,6 +12,7 @@ import {
   CurrentUserSession,
   Role,
   WorkingShift,
+  Holiday,
 } from '../types';
 import { getCurrentMonth, getTodayDateString } from '../utils/dateUtils';
 
@@ -90,10 +91,10 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
   return response.json();
 }
 
-const qs = (params: Record<string, string | undefined>) => {
+const qs = (params: Record<string, string | boolean | undefined>) => {
   const p = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v) p.set(k, v);
+    if (v) p.set(k, String(v));
   });
   const s = p.toString();
   return s ? `?${s}` : '';
@@ -187,6 +188,10 @@ export const ApiService = {
     return fetchJson<GuardUser>(`/guards/${id}/status`, { method: 'PATCH' });
   },
 
+  deleteGuard(id: string): Promise<{ success: boolean; id: string }> {
+    return fetchJson(`/guards/${id}`, { method: 'DELETE' });
+  },
+
   // ================= ATTENDANCE =================
   async getAttendance(filters?: {
     date?: string;
@@ -195,6 +200,8 @@ export const ApiService = {
     to?: string;
     workerId?: string;
     status?: string;
+    /** admin screens: also return ABSENT (and HOLIDAY) rows for workers with no check-in */
+    includeAbsent?: boolean;
   }): Promise<AttendanceRecord[]> {
     return (await fetchJson<AttendanceRecord[]>(`/attendance${qs({ ...filters })}`)).map(fixAtt);
   },
@@ -270,6 +277,19 @@ export const ApiService = {
 
   updateShift(id: string, body: { startTime24?: string; endTime24?: string; title?: string; isActive?: boolean }) {
     return fetchJson<{ shift: WorkingShift; workersMoved: number }>(`/shifts/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  // ================= HOLIDAYS =================
+  getHolidays(range?: { from?: string; to?: string }): Promise<Holiday[]> {
+    return fetchJson<Holiday[]>(`/holidays${qs({ ...range })}`);
+  },
+
+  addHolidays(dates: string[], title?: string): Promise<{ added: number; total: number; months: string[] }> {
+    return fetchJson('/holidays', { method: 'POST', body: JSON.stringify({ dates, title }) });
+  },
+
+  removeHoliday(date: string): Promise<{ success: boolean; date: string }> {
+    return fetchJson(`/holidays/${date}`, { method: 'DELETE' });
   },
 
   // ================= PAYROLL =================

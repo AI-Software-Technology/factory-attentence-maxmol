@@ -13,6 +13,7 @@ import {
 import { AttendanceRulesConfig } from '../../types';
 import { ApiService } from '../../services/api';
 import { DurationInput } from '../common/DurationInput';
+import { HolidayCalendar } from './HolidayCalendar';
 import { buildWorkingTimeLabel, getWorkingTimeDetails, validateWorkingTime } from '../../utils/timeCalculations';
 import { useShifts, setShifts } from '../../hooks/useShifts';
 import { WorkingShift } from '../../types';
@@ -208,6 +209,9 @@ export const AttendanceRulesConfigView: React.FC<AttendanceRulesConfigProps> = (
         </div>
       </div>
 
+      {/* FACTORY HOLIDAY CALENDAR */}
+      <HolidayCalendar />
+
       {/* SALARY & ATTENDANCE POLICY FORM */}
       <form onSubmit={handleSaveRules} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-6 shadow-xl">
         
@@ -245,7 +249,7 @@ export const AttendanceRulesConfigView: React.FC<AttendanceRulesConfigProps> = (
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-emerald-500 font-mono"
               />
               <span className="text-[11px] text-slate-400 mt-1 block">
-                Default: 0 mins. Late deduction is calculated on exact actual late minutes (Per Minute Salary × Late Minutes).
+                Example: shift 09:00, grace 15 → a worker who has not checked in by 09:15 is marked ABSENT. If he arrives later (say 09:30) the absent turns into LATE, and late minutes count from the shift start (30 min), grace is not subtracted. Arriving within grace = on time.
               </span>
             </div>
 

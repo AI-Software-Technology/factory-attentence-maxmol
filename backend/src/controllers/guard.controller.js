@@ -20,3 +20,9 @@ export const toggleStatus = asyncHandler(async (req, res) => {
   if (!updated) throw new HttpError(404, 'Guard not found');
   res.json(updated);
 });
+
+export const remove = asyncHandler(async (req, res) => {
+  const r = await svc.deleteGuard(req.params.id, req.user);
+  if (!r) throw new HttpError(404, 'Guard not found');
+  res.json(r);
+});

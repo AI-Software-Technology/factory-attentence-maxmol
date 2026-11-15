@@ -273,13 +273,14 @@ export const EditAttendanceModal: React.FC<EditProps> = ({ record, rules, onClos
 interface AddProps {
   workers: Worker[];
   defaultDate: string;
+  defaultWorkerId?: string;
   rules: AttendanceRulesConfig | null;
   onClose: () => void;
   onSaved: (note: string) => void;
 }
 
-export const AddAttendanceModal: React.FC<AddProps> = ({ workers, defaultDate, rules, onClose, onSaved }) => {
-  const [workerId, setWorkerId] = useState(workers[0]?.id || '');
+export const AddAttendanceModal: React.FC<AddProps> = ({ workers, defaultDate, defaultWorkerId, rules, onClose, onSaved }) => {
+  const [workerId, setWorkerId] = useState(defaultWorkerId || workers[0]?.id || '');
   const worker = workers.find(w => w.id === workerId);
   const [workingTime, setWorkingTime] = useState(worker?.workingTime || '09:00 AM – 07:00 PM');
   const [checkIn, setCheckIn] = useState(`${defaultDate}T09:00`);

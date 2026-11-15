@@ -5,6 +5,8 @@ import { getAttendance } from './attendance.service.js';
 import { genId, round2 } from '../utils/dateUtils.js';
 import { HttpError } from '../utils/httpError.js';
 import { calculateSalaryBreakdown } from '../utils/timeCalculations.js';
+import { getHolidaySet } from './holiday.service.js';
+import { summarizeWorkerPeriod, monthRange } from '../utils/attendanceDays.js';
 
 /**
  * Initial seed payroll (port of db.ts generateInitialSeedPayroll) — pure function
@@ -97,17 +99,26 @@ export function generateInitialSeedPayroll(workers, attendance, rules, month, ad
 
 export async function getPayroll(month) {
   const matching = await Payroll.find({ month }).sort({ seq: 1 }).select(PUBLIC).lean();
-  if (matching.length === 0) {
-    // Calculate from live database attendance
+  const workerCount = await Worker.countDocuments();
+  // Nothing stored, or workers were added after the last calculation -> calculate again
+  if (matching.length === 0 || matching.length < workerCount) {
     return recalculatePayroll(month);
   }
   return matching;
 }
 
-export async function recalculatePayroll(month, actor) {
+/**
+ * Calculate the month for every worker from real attendance.
+ * Present days = days with a check-in + factory holidays. Absent = days with no check-in once the shift
+ * start + grace is over. Days of the 30-day basis that have not happened yet are NOT paid (pending).
+ * dryRun: same numbers, nothing is written (used by reports so they are always live).
+ */
+export async function recalculatePayroll(month, actor, { dryRun = false } = {}) {
   const workers = await Worker.find().sort({ seq: 1 }).lean();
   const rules = await getRules();
   const attendance = await getAttendance({ month }, { withPhotos: false });
+  const range = monthRange(month);
+  const holidaySet = await getHolidaySet(range.from, range.to);
 
   const workerIds = workers.map(w => w.id);
   const advances = await Advance.find({}).lean();
@@ -132,14 +143,17 @@ export async function recalculatePayroll(month, actor) {
 
   const calculated = workers.map((w, idx) => {
     const records = attendance.filter(a => a.workerId === w.id);
-    const daysAbsent = records.filter(a => a.status === 'ABSENT').length;
+    const period = summarizeWorkerPeriod({
+      worker: w,
+      month,
+      records: attendance,
+      holidaySet,
+      graceMinutes: rules.gracePeriodMinutes,
+    });
+    const { daysAbsent, daysPresent, pendingDays } = period;
     const totalLateMinutes = records.reduce((s, r) => s + (r.lateMinutes || 0), 0);
     const totalOtMinutes = records.reduce((s, r) => s + (r.overtimeMinutes || 0), 0);
     const totalEarlyExitMinutes = records.reduce((s, r) => s + (r.earlyExitMinutes || 0), 0);
-
-    // STRICT 30-DAY MONTHLY SALARY BASIS
-    const workingDaysInMonth = 30;
-    const daysPresent = workingDaysInMonth - daysAbsent;
 
     // Base calculation before advance
     const baseBreakdown = calculateSalaryBreakdown({
@@ -152,6 +166,7 @@ export async function recalculatePayroll(month, actor) {
       totalOtMinutes,
       otRateMultiplier: rules.otRateMultiplier || 1.0,
       advanceDeduction: 0,
+      pendingDays,
     });
 
     const grossEarnings = baseBreakdown.grossPayableBeforeAdvance;
@@ -213,6 +228,7 @@ export async function recalculatePayroll(month, actor) {
       totalOtMinutes,
       otRateMultiplier: rules.otRateMultiplier || 1.0,
       advanceDeduction: deductionNeeded,
+      pendingDays,
     });
 
     // Preserve paid status if already marked paid
@@ -234,6 +250,10 @@ export async function recalculatePayroll(month, actor) {
       totalDaysInMonth: 30,
       daysPresent: finalBreakdown.daysPresent,
       daysAbsent: finalBreakdown.daysAbsent,
+      daysAttended: period.daysAttended,
+      daysHoliday: period.daysHoliday,
+      pendingDays: finalBreakdown.pendingDays,
+      pendingDeduction: finalBreakdown.pendingDeduction,
       absentDeduction: finalBreakdown.absentDeduction,
       totalLateMinutes: finalBreakdown.totalLateMinutes,
       totalLateDeduction: finalBreakdown.lateDeduction,
@@ -260,6 +280,8 @@ export async function recalculatePayroll(month, actor) {
       seq: idx,
     };
   });
+
+  if (dryRun) return calculated.map(({ seq, ...r }) => r);
 
   // ---- Persist ----
   if (touched.size) {

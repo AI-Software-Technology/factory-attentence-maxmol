@@ -4,6 +4,7 @@ import { Worker, AttendanceRecord } from '../../types';
 import { getWorkingTimeDetails,
   formatMinutesToReadable,
 } from '../../utils/timeCalculations';
+import { SafeImg } from '../common/SafeImg';
 
 interface WorkerGateCardProps {
   worker: Worker;
@@ -71,7 +72,7 @@ export const WorkerGateCard: React.FC<WorkerGateCardProps> = ({
         {/* Worker Profile Photo */}
         <div className="relative shrink-0">
           <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-800 shadow-md">
-            <img
+            <SafeImg
               src={worker.profilePhoto}
               alt={worker.fullName}
               className="w-full h-full object-cover"
